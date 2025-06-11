@@ -1,0 +1,31 @@
+#!/bin/bash
+
+BASEDIR=$(realpath $(dirname $0))
+
+NAME=ghcr.io/installr-io/installr-kcd
+VERSION=$(cat ${BASEDIR}/VERSION)
+
+KEYCLOAK_CONFIG_CLI_VERSION=6.3.0
+KEYCLOAK_VERSION=24.0.5
+KEYCLOAK_CLIENT_VERSION=24.0.5
+KEYCLOAK_CONFIG_CLI_BUILD_PROFILE=pre-keycloak26
+
+if [[ -z ${GITHUB_ACTOR} ]] || [[ -z ${GITHUB_TOKEN} ]]; then
+    echo '`GITHUB_ACTOR` and/or `GITHUB_TOKEN` environment variables not set.'
+    echo 'These are necessary to authenticate against github package registry.'
+    exit 1
+fi
+
+docker build \
+    --build-arg KEYCLOAK_CONFIG_CLI_VERSION=${KEYCLOAK_CONFIG_CLI_VERSION} \
+    --build-arg KEYCLOAK_CONFIG_CLI_BUILD_PROFILE=${KEYCLOAK_CONFIG_CLI_BUILD_PROFILE} \
+    --build-arg KEYCLOAK_VERSION=${KEYCLOAK_VERSION} \
+    --build-arg KEYCLOAK_CLIENT_VERSION=${KEYCLOAK_CLIENT_VERSION} \
+    --secret id=GITHUB_ACTOR \
+    --secret id=GITHUB_TOKEN \
+    --tag ${NAME}:${VERSION} \
+    ${BASEDIR}
+
+if [[ $1 == "--push" ]]; then
+    docker image push ${NAME}:${VERSION}
+fi

@@ -1,0 +1,809 @@
+diff --git a/pom.xml b/pom.xml
+index e5e50f69..2c6c7cff 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -90,6 +90,8 @@
+         <testcontainers.version>1.20.3</testcontainers.version>
+         <unboundid-ldapsdk.version>7.0.1</unboundid-ldapsdk.version>
+         <wiremock-jre8.version>2.27.2</wiremock-jre8.version>
++        <logback-access.version>1.4.14</logback-access.version>
++        <installrd-deployer-api.version>0.1.0-SNAPSHOT</installrd-deployer-api.version>
+ 
+         <sonar.projectKey>keycloak-config-cli</sonar.projectKey>
+         <sonar.organization>adorsys</sonar.organization>
+@@ -217,6 +219,21 @@
+             <scope>runtime</scope>
+         </dependency>
+ 
++        <dependency>
++            <groupId>org.springframework.boot</groupId>
++            <artifactId>spring-boot-starter-web</artifactId>
++        </dependency>
++        <dependency>
++            <groupId>io.installr</groupId>
++            <artifactId>installrd-deployer-api</artifactId>
++            <version>${installrd-deployer-api.version}</version>
++        </dependency>
++	<dependency>
++            <groupId>ch.qos.logback</groupId>
++            <artifactId>logback-access</artifactId>
++            <version>${logback-access.version}</version>
++        </dependency>
++    
+         <!-- TEST -->
+         <dependency>
+             <groupId>org.springframework.boot</groupId>
+@@ -277,6 +294,20 @@
+         </dependency>
+     </dependencies>
+ 
++    <repositories>
++        <repository>
++            <releases>
++                <enabled>true</enabled>
++            </releases>
++            <snapshots>
++                <enabled>true</enabled>
++            </snapshots>
++            <id>installr-io-maven-releases</id>
++            <name>Installr.io Maven Release Repository</name>
++            <url>https://maven.pkg.github.com/installr-io/maven-releases</url>
++        </repository>
++    </repositories>
++
+     <build>
+         <finalName>${project.artifactId}</finalName>
+         <pluginManagement>
+@@ -567,6 +598,7 @@
+                     <failsOnError>true</failsOnError>
+                     <linkXRef>false</linkXRef>
+                     <violationSeverity>warning</violationSeverity>
++                    <excludes>**/io/installr/**</excludes>
+                 </configuration>
+                 <executions>
+                     <execution>
+diff --git a/src/main/java/de/adorsys/keycloak/config/KeycloakConfigApplication.java b/src/main/java/de/adorsys/keycloak/config/KeycloakConfigApplication.java
+index 5fa68270..0f1ef8aa 100644
+--- a/src/main/java/de/adorsys/keycloak/config/KeycloakConfigApplication.java
++++ b/src/main/java/de/adorsys/keycloak/config/KeycloakConfigApplication.java
+@@ -23,16 +23,26 @@ package de.adorsys.keycloak.config;
+ import de.adorsys.keycloak.config.properties.ImportConfigProperties;
+ import de.adorsys.keycloak.config.properties.KeycloakConfigProperties;
+ import org.springframework.boot.SpringApplication;
++import org.springframework.boot.WebApplicationType;
+ import org.springframework.boot.autoconfigure.SpringBootApplication;
+ import org.springframework.boot.context.properties.EnableConfigurationProperties;
++import org.springframework.context.annotation.ComponentScan;
+ 
+ @SpringBootApplication(proxyBeanMethods = false)
+ @EnableConfigurationProperties({KeycloakConfigProperties.class, ImportConfigProperties.class})
++@ComponentScan(basePackages = {"de.adorsys.keycloak.config", "io.installr.deployer.keycloak"})
+ public class KeycloakConfigApplication {
+     public static void main(String[] args) {
+-        // https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#boot-features-application-exit
+-        Runtime.getRuntime().exit(
+-                SpringApplication.exit(SpringApplication.run(KeycloakConfigApplication.class, args))
++        final WebApplicationType webApplicationType = WebApplicationType.valueOf(
++                System.getProperty("spring.main.web-application-type", "NONE")
+         );
++        if (webApplicationType == WebApplicationType.NONE) {
++            // https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#boot-features-application-exit
++            Runtime.getRuntime().exit(
++                    SpringApplication.exit(SpringApplication.run(KeycloakConfigApplication.class, args))
++            );
++        } else {
++            SpringApplication.run(KeycloakConfigApplication.class, args);
++        }
+     }
+ }
+diff --git a/src/main/java/de/adorsys/keycloak/config/KeycloakConfigRunner.java b/src/main/java/de/adorsys/keycloak/config/KeycloakConfigRunner.java
+index d254adf5..b94b4ebe 100644
+--- a/src/main/java/de/adorsys/keycloak/config/KeycloakConfigRunner.java
++++ b/src/main/java/de/adorsys/keycloak/config/KeycloakConfigRunner.java
+@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.boot.CommandLineRunner;
+ import org.springframework.boot.ExitCodeGenerator;
++import org.springframework.boot.autoconfigure.condition.ConditionalOnNotWebApplication;
+ import org.springframework.stereotype.Component;
+ 
+ import java.text.SimpleDateFormat;
+@@ -39,6 +40,7 @@ import java.util.List;
+ import java.util.Map;
+ 
+ @Component
++@ConditionalOnNotWebApplication
+ public class KeycloakConfigRunner implements CommandLineRunner, ExitCodeGenerator {
+     private static final Logger logger = LoggerFactory.getLogger(KeycloakConfigRunner.class);
+     private static final long START_TIME = System.currentTimeMillis();
+diff --git a/src/main/java/de/adorsys/keycloak/config/properties/KeycloakConfigProperties.java b/src/main/java/de/adorsys/keycloak/config/properties/KeycloakConfigProperties.java
+index 0dc8339d..29e44d6b 100644
+--- a/src/main/java/de/adorsys/keycloak/config/properties/KeycloakConfigProperties.java
++++ b/src/main/java/de/adorsys/keycloak/config/properties/KeycloakConfigProperties.java
+@@ -45,11 +45,11 @@ public class KeycloakConfigProperties {
+     private final String version;
+ 
+     @NotNull
+-    private final String url;
++    private String url;
+ 
+-    private final String user;
++    private String user;
+ 
+-    private final String password;
++    private String password;
+ 
+     private final String clientSecret;
+ 
+@@ -110,14 +110,26 @@ public class KeycloakConfigProperties {
+         return url;
+     }
+ 
++    public void setUrl(String url) {
++        this.url = url;
++    }
++
+     public String getUser() {
+         return user;
+     }
+ 
++    public void setUser(String user) {
++        this.user = user;
++    }
++
+     public String getPassword() {
+         return password;
+     }
+ 
++    public void setPassword(String password) {
++        this.password = password;
++    }
++
+     public boolean isSslVerify() {
+         return sslVerify;
+     }
+diff --git a/src/main/java/io/installr/deployer/keycloak/AccessLogConfiguration.java b/src/main/java/io/installr/deployer/keycloak/AccessLogConfiguration.java
+new file mode 100644
+index 00000000..e982166d
+--- /dev/null
++++ b/src/main/java/io/installr/deployer/keycloak/AccessLogConfiguration.java
+@@ -0,0 +1,41 @@
++/*-
++ * ---license-start
++ * Installr Deployer Interface for keycloak-config-cli
++ * ---
++ * Copyright (C) 2025 Installr.io - maintained by Dorian Vallant (dorian@installr.io)
++ * ---
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ * ---license-end
++ */
++package io.installr.deployer.keycloak;
++
++import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Configuration;
++
++import ch.qos.logback.access.tomcat.LogbackValve;
++
++@Configuration
++public class AccessLogConfiguration {
++
++    @Bean
++    public TomcatServletWebServerFactory tomcatServletWebServerFactory() {
++        final TomcatServletWebServerFactory tomcatServletWebServerFactory = new TomcatServletWebServerFactory();
++        final LogbackValve logbackValve = new LogbackValve();
++        logbackValve.setFilename( "logback-access.xml" );
++        logbackValve.setQuiet( true );
++        tomcatServletWebServerFactory.addContextValves( logbackValve );
++        return tomcatServletWebServerFactory;
++    }
++
++}
+\ No newline at end of file
+diff --git a/src/main/java/io/installr/deployer/keycloak/BiConsumer.java b/src/main/java/io/installr/deployer/keycloak/BiConsumer.java
+new file mode 100644
+index 00000000..2f264d3c
+--- /dev/null
++++ b/src/main/java/io/installr/deployer/keycloak/BiConsumer.java
+@@ -0,0 +1,29 @@
++/*-
++ * ---license-start
++ * Installr Deployer Interface for keycloak-config-cli
++ * ---
++ * Copyright (C) 2025 Installr.io - maintained by Dorian Vallant (dorian@installr.io)
++ * ---
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ * ---license-end
++ */
++package io.installr.deployer.keycloak;
++
++import java.io.IOException;
++
++@FunctionalInterface
++public interface BiConsumer<T,U> {
++
++    void accept(T t, U u) throws IOException;
++    
++}
+diff --git a/src/main/java/io/installr/deployer/keycloak/EnvironmentInterpolator.java b/src/main/java/io/installr/deployer/keycloak/EnvironmentInterpolator.java
+new file mode 100644
+index 00000000..dc05cd3a
+--- /dev/null
++++ b/src/main/java/io/installr/deployer/keycloak/EnvironmentInterpolator.java
+@@ -0,0 +1,81 @@
++/*-
++ * ---license-start
++ * Installr Deployer Interface for keycloak-config-cli
++ * ---
++ * Copyright (C) 2025 Installr.io - maintained by Dorian Vallant (dorian@installr.io)
++ * ---
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ * ---license-end
++ */
++package io.installr.deployer.keycloak;
++
++import java.util.Map;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++import java.util.stream.Collectors;
++import java.util.stream.Stream;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.stereotype.Component;
++
++@Component
++public class EnvironmentInterpolator {
++
++    private static final Logger logger = LoggerFactory.getLogger( EnvironmentInterpolator.class );
++
++    public String interpolate( String json, Map<String, String> env ) {
++        final Pattern pattern = Pattern.compile( "\\$\\{(.*?)(:-(.*?))?\\}" );
++        final Matcher matcher = pattern.matcher( json );
++        final StringBuilder resultBuilder = new StringBuilder();
++        while( matcher.find() ) {
++            String propertyKey = matcher.group( 1 );
++            String propertyDef = matcher.group( 3 );
++            logger.debug( "found ref-key: {}", propertyKey );
++            String propertyVal = env.get( propertyKey );
++            logger.debug( "        found: {}", propertyVal );
++            logger.debug( "      default: {}", propertyDef );
++            if ( propertyVal == null || propertyVal.isBlank() ) {
++                logger.warn( "invalid property reference: {}", propertyKey );
++                propertyVal = propertyDef == null ? "" : propertyDef;
++            }
++            logger.debug( "        value: {}", propertyVal );
++            matcher.appendReplacement( resultBuilder, propertyVal );
++        }
++        matcher.appendTail( resultBuilder );
++        return trimArrays( resultBuilder.toString() );
++    }
++    
++    private String trimArrays( final String json ) {
++        final Pattern pattern = Pattern.compile( "(?<=\\[)\\s*\".*?(?=\\])", Pattern.DOTALL );
++        final Matcher matcher = pattern.matcher( json );
++        final StringBuilder resultBuilder = new StringBuilder();
++        while( matcher.find() ) {
++            matcher.appendReplacement( resultBuilder, toArrayString( matcher.group() ) );
++        }
++        matcher.appendTail( resultBuilder );
++        return resultBuilder.toString();
++    }
++    
++    private String toArrayString( final String str ) {
++        return Stream.of( str.split( "," ) )
++                // remove quotes to filter out blanks
++                .map( token -> token.toString().trim().replace( "\"", "" ) )
++                .filter( token -> !token.isBlank() )
++                // add quotes
++                .map( token -> "\"" + token + "\"" )
++                .collect( Collectors.joining( "," ) )
++        ;
++    }
++    
++}
+diff --git a/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java
+new file mode 100644
+index 00000000..f6bdff7f
+--- /dev/null
++++ b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java
+@@ -0,0 +1,331 @@
++/*-
++ * ---license-start
++ * Installr Deployer Interface for keycloak-config-cli
++ * ---
++ * Copyright (C) 2025 Installr.io - maintained by Dorian Vallant (dorian@installr.io)
++ * ---
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ * ---license-end
++ */
++
++package io.installr.deployer.keycloak;
++
++import java.io.IOException;
++import java.nio.charset.Charset;
++import java.nio.charset.StandardCharsets;
++import java.util.List;
++import java.util.Map;
++import java.util.Optional;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++import java.util.stream.Stream;
++
++import org.apache.commons.codec.digest.DigestUtils;
++import org.keycloak.admin.client.Keycloak;
++import org.keycloak.admin.client.resource.ClientResource;
++import org.keycloak.representations.idm.ClientRepresentation;
++import org.keycloak.representations.idm.ClientScopeRepresentation;
++import org.keycloak.representations.idm.RealmRepresentation;
++import org.keycloak.representations.idm.RoleRepresentation;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Service;
++
++import com.fasterxml.jackson.core.JsonParser;
++import com.fasterxml.jackson.databind.ObjectMapper;
++
++import de.adorsys.keycloak.config.model.RealmImport;
++import de.adorsys.keycloak.config.properties.KeycloakConfigProperties;
++import de.adorsys.keycloak.config.provider.KeycloakProvider;
++import de.adorsys.keycloak.config.service.ClientImportService;
++import de.adorsys.keycloak.config.service.RealmImportService;
++import io.installr.daemon.api.deployer.Deployment;
++import io.installr.daemon.api.deployer.DeploymentException;
++import io.installr.daemon.api.deployer.queue.AbstractQueuedDeployer;
++import jakarta.annotation.PostConstruct;
++import jakarta.ws.rs.core.Response;
++
++@Service
++public class KeycloakDeployer extends AbstractQueuedDeployer {
++
++    private static final Logger logger = LoggerFactory.getLogger( KeycloakDeployer.class );
++    private static final String REALM_ATTR = "realm";
++
++    private static enum MediaType {
++        Realm ( "application/vnd.io.installr.kc-realm"  )
++    ,   Role  ( "application/vnd.io.installr.kc-role"   )
++    ,   Client( "application/vnd.io.installr.kc-client" )
++    ,   Scope ( "application/vnd.io.installr.kc-scope"  )
++    ;
++
++        final String mediaTypeString;
++        MediaType( String mediaTypeString ) { this.mediaTypeString = mediaTypeString; }
++
++        static MediaType valueByMediaTypeString( String mediaTypeString ) {
++            return Stream.of( values() )
++                .filter( x -> x.mediaTypeString.equals( mediaTypeString ) )
++                .findFirst()
++                .orElseThrow(() -> new DeploymentException( "MediaType '%s' not supported.", mediaTypeString ) )
++            ;
++        }
++    }
++
++    @Autowired
++    KeycloakConfigProperties configProperties;
++
++    @Autowired
++    EnvironmentInterpolator interpolator;
++
++    @Autowired
++    KeycloakProvider keycloakProvider;
++
++    @Autowired
++    RealmImportService realmImportService;
++
++    @Autowired
++    ClientImportService clientImportService;
++
++    @Autowired
++    ObjectMapper objectMapper;
++
++    @PostConstruct
++    void init() {
++        objectMapper.configure( JsonParser.Feature.ALLOW_COMMENTS, true );
++    }
++
++    @Override
++    protected void doDeploy( Deployment deployment ) throws DeploymentException {
++        doWork( deployment, (mediaType, json) -> {
++            switch ( mediaType ) {
++                case Realm  : deployRealm ( json, deployment.getEnv() ); break;
++                case Role   : deployRole  ( json, deployment.getEnv() ); break;
++                case Client : deployClient( json, deployment.getEnv() ); break;
++                case Scope  : deployScope ( json, deployment.getEnv() ); break;
++                default:
++                    throw new DeploymentException( "Unsupported media type: %s", mediaType );
++            }
++        });
++    }
++
++    @Override
++    protected void doUndeploy( Deployment deployment ) throws DeploymentException {
++        doWork( deployment, (mediaType, json) -> {
++            switch ( mediaType ) {
++                case Realm  : undeployRealm ( json, deployment.getEnv() ); break;
++                case Role   : undeployRole  ( json, deployment.getEnv() ); break;
++                case Client : undeployClient( json, deployment.getEnv() ); break;
++                case Scope  : undeployScope ( json, deployment.getEnv() ); break;
++                default:
++                    throw new DeploymentException( "Unsupported media type: %s", mediaType );
++            }
++        });
++    }
++
++    private void doWork( Deployment deployment, BiConsumer<MediaType, String> job ) {
++        configProperties.setUrl( deployment.getEnv().get( "keycloak.url" ) );
++        configProperties.setUser( deployment.getEnv().get( "keycloak.user" ) );
++        configProperties.setPassword( deployment.getEnv().get( "keycloak.password" ) );
++        try {
++            final MediaType mediaType = MediaType.valueByMediaTypeString( deployment.getMediaType() );
++            final String json = interpolator.interpolate(
++                new String( deployment.getData(), toCharset( deployment.getEncoding() ) ), deployment.getEnv()
++            );
++            job.accept( mediaType, json );
++        }
++        catch ( Throwable t ) {
++            logger.error( "STACKTRACE", t );
++            throw new DeploymentException( t.getMessage() );
++        }
++        finally {
++            keycloakProvider.getInstance().close();
++        }
++    }
++
++    private Charset toCharset( String encoding ) {
++        if ( encoding == null ) {
++            return StandardCharsets.UTF_8;
++        }
++        return Charset.forName( encoding );
++    }
++
++    private void deployRealm( String json, Map<String, String> env ) throws IOException {
++        RealmImport rr = objectMapper.readValue( json, RealmImport.class );
++        rr.setChecksum( DigestUtils.sha256Hex( json ) );
++        realmImportService.doImport( rr );
++    }
++
++    private void undeployRealm( String json, Map<String, String> env ) throws IOException {
++        RealmRepresentation rr = objectMapper.readValue( json, RealmRepresentation.class );
++        Keycloak kc = keycloakProvider.getInstance();
++        boolean exists = kc.realms().findAll().stream()
++            .anyMatch( r -> rr.getRealm().equalsIgnoreCase( r.getRealm() ) )
++        ;
++        if ( exists ) {
++            kc.realm( rr.getRealm() ).remove();
++        }
++    }
++
++    private void deployRole( String json, Map<String, String> env ) throws IOException {
++        String realm = extractRealm( json, env.get( REALM_ATTR ) );
++        logger.info( "Deploying role to realm '{}'", realm );
++        RoleRepresentation rr = objectMapper.readValue( json, RoleRepresentation.class );
++        Keycloak kc = keycloakProvider.getInstance();
++        boolean exists = kc.realm( realm ).roles().list().stream()
++            .anyMatch( r -> rr.getName().equalsIgnoreCase( r.getName() ) )
++        ;
++        if ( exists ) {
++            kc.realm( realm ).roles().get( rr.getName() ).update( rr );
++        }
++        else {
++            kc.realm( realm ).roles().create( rr );
++        }
++    }
++
++    private void undeployRole( String json, Map<String, String> env ) throws IOException {
++        String realm = extractRealm( json, env.get( REALM_ATTR ) );
++        logger.info( "Un-deploying role from realm '{}'", realm );
++        RoleRepresentation rr = objectMapper.readValue( json, RoleRepresentation.class );
++        Keycloak kc = keycloakProvider.getInstance();
++        boolean exists = kc.realm( realm ).roles().list().stream()
++            .anyMatch( r -> rr.getName().equalsIgnoreCase( r.getName() ) )
++        ;
++        if ( exists ) {
++            kc.realm( realm ).roles().get( rr.getName() ).remove();
++        }
++    }
++    
++    private void deployClient( String json, Map<String, String> env ) throws IOException {
++        String realm = extractRealm( json, env.get( REALM_ATTR ) );
++        logger.info( "Deploying client to realm '{}'", realm );
++        Keycloak kc = keycloakProvider.getInstance();
++        ClientRepresentation cr = objectMapper.readValue( json, ClientRepresentation.class );
++        autoCreateNonExistentScopes( realm, cr.getDefaultClientScopes() );
++        Optional<ClientRepresentation> cl = 
++            kc.realm( realm ).clients().findByClientId( cr.getClientId() ).stream().findFirst()
++        ;
++        final String secret = env.get( cr.getClientId() + "_secret" );
++        if ( cl.isPresent() ) {
++            // Since the api does not update all attributes we remove the client first and re-create it with the same
++            // id and secret.
++            cr.setId( cl.get().getId() );
++            if ( cr.getSecret() == null && secret == null ) {
++                // If there is no secret set, we take the old secret
++                ClientResource client = kc.realm( realm ).clients().get( cl.get().getId() );
++                cr.setSecret( client.getSecret().getValue() );
++            }
++        }
++        if ( cr.getSecret() == null && !cr.isPublicClient() ) {
++            cr.setSecret( secret );
++        }
++        RealmRepresentation rr = new RealmRepresentation();
++        rr.setRealm( realm );
++        rr.setClients( List.of( cr ) );
++        
++        final String clientJson = objectMapper.writeValueAsString( rr );
++        RealmImport ri = objectMapper.readValue( clientJson, RealmImport.class );
++        ri.setChecksum( DigestUtils.sha256Hex( clientJson ) );
++        clientImportService.doImport( ri );
++    }
++
++    private void undeployClient( String json, Map<String, String> env ) throws IOException {
++        String realm = extractRealm( json, env.get( REALM_ATTR ) );
++        logger.info( "Un-deploying client from realm '{}'", realm );
++        ClientRepresentation cr = objectMapper.readValue( json, ClientRepresentation.class );
++        Keycloak kc = keycloakProvider.getInstance();
++        Optional<ClientRepresentation> cl = 
++            kc.realm( realm ).clients().findByClientId( cr.getClientId() ).stream().findFirst()
++        ;
++        if ( cl.isPresent() ) {
++            kc.realm( realm ).clients().get( cl.get().getId() ).remove();
++        }
++    }
++
++    private void deployScope( String json, Map<String, String> env ) throws IOException {
++        String realm = extractRealm( json, env.get( REALM_ATTR ) );
++        logger.info( "Deploying scope to realm '{}'", realm );
++        createScope( realm, objectMapper.readValue( json, ClientScopeRepresentation.class ) );
++    }
++
++    private void undeployScope( String json, Map<String, String> env ) throws IOException {
++        String realm = extractRealm( json, env.get( REALM_ATTR ) );
++        logger.info( "Un-deploying scope from realm '{}'", realm );
++        ClientScopeRepresentation csr = objectMapper.readValue( json, ClientScopeRepresentation.class );
++        Keycloak kc = keycloakProvider.getInstance();
++        Optional<ClientScopeRepresentation> ocsr = kc.realm( realm ).clientScopes().findAll().stream()
++            .filter( s -> csr.getName().equalsIgnoreCase( s.getName() ) )
++            .findFirst()
++        ;
++        if ( ocsr.isPresent() ) {
++            kc.realm( realm ).clientScopes().get( ocsr.get().getId() ).remove();
++        }
++    }
++    
++    private String extractRealm( String json, String defaultRealm ) {
++        final Pattern pattern = Pattern.compile( "//\s*@realm=(.*)" );
++        final String firstLine = json.split( "\r?\n" )[0];
++        final Matcher matcher = pattern.matcher( firstLine );
++        if ( !matcher.matches() ) {
++            return defaultRealm;
++        }
++        return matcher.group( 1 );
++    }
++
++    private Optional<ClientScopeRepresentation> findScope( String realm, String scopeName ) {
++        Keycloak kc = keycloakProvider.getInstance();
++        return kc.realm( realm ).clientScopes().findAll().stream()
++            .filter( s -> scopeName.equalsIgnoreCase( s.getName() ) )
++            .findFirst()
++        ;
++    }
++    
++    private void createScope( String realm, ClientScopeRepresentation csr ) {
++        Optional<ClientScopeRepresentation> ocsr = findScope( realm, csr.getName() );
++        Keycloak kc = keycloakProvider.getInstance();
++        if ( ocsr.isPresent() ) {
++            kc.realm( realm ).clientScopes().get( ocsr.get().getId() ).update( csr );
++        }
++        else {
++            checkResponse( kc.realm( realm ).clientScopes().create( csr ) );
++        }
++    }
++
++    private void autoCreateNonExistentScopes( String realm, List<String> scopes ) {
++        if ( scopes == null || scopes.isEmpty() ) {
++            return;
++        }
++        scopes.forEach(
++            name -> {
++                if ( findScope( realm, name ).isEmpty() ) {
++                    logger.debug( "scope '{}' not found; auto-creating it...", name );
++                    ClientScopeRepresentation csr = new ClientScopeRepresentation();
++                    csr.setName( name );
++                    csr.setDescription( "auto-generated" );
++                    csr.setProtocol( "openid-connect" );
++                    createScope( realm, csr );
++                }
++            }
++        );
++    }
++
++    private void checkResponse( Response response ) {
++        if ( response == null ) {
++            return;
++        }
++        final Response.StatusType statusInfo = response.getStatusInfo();
++        if ( statusInfo.getFamily() != Response.Status.Family.SUCCESSFUL ) {
++            throw new IllegalStateException( statusInfo.getStatusCode() + " " + statusInfo.getReasonPhrase() );
++        }
++    }
++
++}
+diff --git a/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java
+new file mode 100644
+index 00000000..007cf3eb
+--- /dev/null
++++ b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java
+@@ -0,0 +1,109 @@
++/*-
++ * ---license-start
++ * Installr Deployer Interface for keycloak-config-cli
++ * ---
++ * Copyright (C) 2025 Installr.io - maintained by Dorian Vallant (dorian@installr.io)
++ * ---
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ * ---license-end
++ */
++
++package io.installr.deployer.keycloak;
++
++import java.io.IOException;
++import java.util.Map;
++
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.http.ResponseEntity;
++import org.springframework.web.bind.annotation.DeleteMapping;
++import org.springframework.web.bind.annotation.GetMapping;
++import org.springframework.web.bind.annotation.PathVariable;
++import org.springframework.web.bind.annotation.PutMapping;
++import org.springframework.web.bind.annotation.RequestPart;
++import org.springframework.web.bind.annotation.RestController;
++import org.springframework.web.multipart.MultipartFile;
++
++import io.installr.daemon.api.deployer.Deployment;
++import io.installr.daemon.api.deployer.DeploymentException;
++import io.installr.daemon.api.deployer.DeploymentResponse;
++import io.installr.daemon.api.deployer.DeploymentStatus;
++
++@RestController
++public class KeycloakDeployerController {
++
++    /**
++     * Spring does not map form parameters of multipart/form-data requests to JSON nor does it support to set
++     * <code>@RequestParam</code> within a DTO. So we need to have all parameters in the endpoint spec rather than in a
++     * custom DTO :/
++     */
++
++    @Autowired
++    KeycloakDeployer keycloakDeployer;
++
++    @PutMapping( path = "/Deployer.deploy/{name}", consumes = "multipart/form-data", produces = "application/json" )
++    public ResponseEntity<DeploymentResponse> deploy(
++        @PathVariable( value = "name"      , required = true  ) String name
++    ,   @RequestPart ( value = "data"      , required = true  ) MultipartFile data
++    ,   @RequestPart ( value = "media-type", required = true  ) String mediaType
++    ,   @RequestPart ( value = "env"       , required = true  ) Map<String, String> env
++    ,   @RequestPart ( value = "encoding"  , required = false ) String encoding
++    ) {
++        keycloakDeployer.deploy( toDeployment( name, data, mediaType, env, encoding ) );
++        return ResponseEntity.accepted().body( keycloakDeployer.status( name ) );
++    }
++
++    @DeleteMapping( path = "/Deployer.undeploy/{name}", consumes = "multipart/form-data", produces = "application/json" )
++    public ResponseEntity<DeploymentResponse> undeploy(
++        @PathVariable( value = "name"      , required = true  ) String name
++    ,   @RequestPart ( value = "data"      , required = true  ) MultipartFile data
++    ,   @RequestPart ( value = "media-type", required = true  ) String mediaType
++    ,   @RequestPart ( value = "env"       , required = true  ) Map<String, String> env
++    ,   @RequestPart ( value = "encoding"  , required = false ) String encoding
++    ) {
++        keycloakDeployer.undeploy( toDeployment( name, data, mediaType, env, encoding ) );
++        return ResponseEntity.accepted().body( keycloakDeployer.status( name ) );
++    }
++
++    @GetMapping( path = "/Deployer.status/{name}", produces = "application/json" )
++    public ResponseEntity<DeploymentResponse> status( @PathVariable String name ) {
++        final DeploymentResponse status = keycloakDeployer.status( name );
++        if ( status == null ) {
++            final DeploymentResponse errorResponse = new DeploymentResponse();
++            errorResponse.setStatus( DeploymentStatus.Failed );
++            errorResponse.setMessage( String.format( "'%s' not in queue.", name ) );
++            return ResponseEntity.badRequest().body( errorResponse );
++        }
++        return ResponseEntity.ok().body( status );
++    }
++
++    private Deployment toDeployment(
++        String name, MultipartFile data, String type, Map<String, String> env, String encoding ) {
++        Deployment deployment = new Deployment();
++        deployment.setName( name );
++        deployment.setData( getBytes( data ) );
++        deployment.setMediaType( type );
++        deployment.setEncoding( encoding );
++        deployment.setEnv( env );
++        return deployment;
++    }
++
++    private byte[] getBytes( MultipartFile data ) {
++        try {
++            return data.getBytes();
++        }
++        catch ( IOException ex ) {
++            throw new DeploymentException( "Error reading data: %s", ex.getMessage() );
++        }
++    }
++
++}
+diff --git a/src/main/resources/logback-access.xml b/src/main/resources/logback-access.xml
+new file mode 100644
+index 00000000..72ce1a51
+--- /dev/null
++++ b/src/main/resources/logback-access.xml
+@@ -0,0 +1,17 @@
++<configuration>
++    <!-- default access log 'common' format (for reference) -->
++    <property name="COMMON_PATTERN" value='%h %l %u [%t] "%r" %s %b'/>
++    <!-- default access log 'combined' format -->
++    <property name="COMBINED_PATTERN" value='%h %l %u [%t] "%r" %s %b "%i{Referer}" "%i{User-Agent}"'/>
++
++    <!-- combined format extended with thread name and elapsed time in ms -->
++    <property name="CUSTOM_PATTERN" value="${COMBINED_PATTERN} | [%I] %T{}ms"/>
++
++    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
++		<encoder class="ch.qos.logback.access.PatternLayoutEncoder">
++            <pattern>%yellow(${CUSTOM_PATTERN})</pattern>
++		</encoder>
++	</appender>
++
++	<appender-ref ref="STDOUT" />
++</configuration>
