@@ -53,6 +53,9 @@ ENTRYPOINT [ \
     "--keycloak.url=", \
     "--keycloak.user=", \
     "--keycloak.password=", \
+    "--keycloak.availability-check.enabled=true", \
+    "--keycloak.availability-check.timeout=30s", \
+    "--keycloak.availability-check.retry-delay=2s", \
     "--import.files.locations=", \
     "--import.managed.authentication-flow=no-delete", \
     "--import.managed.identity-provider=no-delete", \
