@@ -1,14 +1,14 @@
 ##
 ## BUILD STAGE
 ##
-FROM redhat/ubi10:10.0 AS builder
+FROM maven:3.9.9-eclipse-temurin-21-alpine AS builder
 ARG KEYCLOAK_CONFIG_CLI_VERSION
 ARG KEYCLOAK_VERSION
 ARG KEYCLOAK_CLIENT_VERSION
 ARG KEYCLOAK_CONFIG_CLI_BUILD_PROFILE
 
 ## install build tools
-RUN dnf -y install gzip patch maven
+RUN apk add patch
 
 ## build dir
 WORKDIR /build
@@ -36,18 +36,18 @@ RUN --mount=type=secret,id=GITHUB_ACTOR,env=GITHUB_ACTOR,required \
 ##
 ## PRODUCTION STAGE
 ##
-FROM registry.access.redhat.com/ubi8/openjdk-21:1.20
+FROM ghcr.io/installr-io/uci:jre21
 LABEL org.opencontainers.image.source=https://github.com/installr-io/installr-kcd
 ARG KEYCLOAK_CONFIG_CLI_VERSION
 
-COPY --from=builder /build/keycloak-config-cli-${KEYCLOAK_CONFIG_CLI_VERSION}/target/keycloak-config-cli.jar \
-    /deployments/
+COPY --from=builder /build/keycloak-config-cli-${KEYCLOAK_CONFIG_CLI_VERSION}/target/keycloak-config-cli.jar .
 
-ENV JAVA_OPTS_APPEND="-Dspring.main.web-application-type=SERVLET"
-ENV JAVA_APP_JAR="/deployments/keycloak-config-cli.jar"
+ENV UCI_JRE_CUSTOM_OPTS="-Dspring.main.web-application-type=SERVLET"
 
 ENTRYPOINT [ \
-    "/opt/jboss/container/java/run/run-java.sh", \
+    "bin/run-java", \
+    "-jar", \
+    "keycloak-config-cli.jar", \
     "--logging.level.root=${LOG_LEVEL:-warn}", \
     "--keycloak.ssl-verify=false", \
     "--keycloak.url=", \
