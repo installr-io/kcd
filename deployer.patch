@@ -334,10 +334,10 @@ index 00000000..dc05cd3a
 +}
 diff --git a/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java
 new file mode 100644
-index 00000000..f6bdff7f
+index 00000000..de89aede
 --- /dev/null
 +++ b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java
-@@ -0,0 +1,331 @@
+@@ -0,0 +1,336 @@
 +/*-
 + * ---license-start
 + * Installr Deployer Interface for keycloak-config-cli
@@ -390,14 +390,15 @@ index 00000000..f6bdff7f
 +import de.adorsys.keycloak.config.provider.KeycloakProvider;
 +import de.adorsys.keycloak.config.service.ClientImportService;
 +import de.adorsys.keycloak.config.service.RealmImportService;
++import io.installr.daemon.api.deployer.Deployer;
 +import io.installr.daemon.api.deployer.Deployment;
 +import io.installr.daemon.api.deployer.DeploymentException;
-+import io.installr.daemon.api.deployer.queue.AbstractQueuedDeployer;
 +import jakarta.annotation.PostConstruct;
++import jakarta.ws.rs.ClientErrorException;
 +import jakarta.ws.rs.core.Response;
 +
 +@Service
-+public class KeycloakDeployer extends AbstractQueuedDeployer {
++public class KeycloakDeployer implements Deployer {
 +
 +    private static final Logger logger = LoggerFactory.getLogger( KeycloakDeployer.class );
 +    private static final String REALM_ATTR = "realm";
@@ -445,7 +446,7 @@ index 00000000..f6bdff7f
 +    }
 +
 +    @Override
-+    protected void doDeploy( Deployment deployment ) throws DeploymentException {
++    public void deploy( Deployment deployment ) throws DeploymentException {
 +        doWork( deployment, (mediaType, json) -> {
 +            switch ( mediaType ) {
 +                case Realm  : deployRealm ( json, deployment.getEnv() ); break;
@@ -459,7 +460,7 @@ index 00000000..f6bdff7f
 +    }
 +
 +    @Override
-+    protected void doUndeploy( Deployment deployment ) throws DeploymentException {
++    public void undeploy( Deployment deployment ) throws DeploymentException {
 +        doWork( deployment, (mediaType, json) -> {
 +            switch ( mediaType ) {
 +                case Realm  : undeployRealm ( json, deployment.getEnv() ); break;
@@ -483,9 +484,13 @@ index 00000000..f6bdff7f
 +            );
 +            job.accept( mediaType, json );
 +        }
++        catch ( ClientErrorException | IOException ex ) {
++            logger.warn( "{} (ex={}): {}", deployment.getName(), ex.getClass().getName(), ex.getMessage() );
++            throw new DeploymentException( ex.getMessage() );
++        }
 +        catch ( Throwable t ) {
 +            logger.error( "STACKTRACE", t );
-+            throw new DeploymentException( t.getMessage() );
++            throw t;
 +        }
 +        finally {
 +            keycloakProvider.getInstance().close();
@@ -671,10 +676,10 @@ index 00000000..f6bdff7f
 +}
 diff --git a/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java
 new file mode 100644
-index 00000000..007cf3eb
+index 00000000..93f0e492
 --- /dev/null
 +++ b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,111 @@
 +/*-
 + * ---license-start
 + * Installr Deployer Interface for keycloak-config-cli
@@ -703,7 +708,6 @@ index 00000000..007cf3eb
 +import org.springframework.beans.factory.annotation.Autowired;
 +import org.springframework.http.ResponseEntity;
 +import org.springframework.web.bind.annotation.DeleteMapping;
-+import org.springframework.web.bind.annotation.GetMapping;
 +import org.springframework.web.bind.annotation.PathVariable;
 +import org.springframework.web.bind.annotation.PutMapping;
 +import org.springframework.web.bind.annotation.RequestPart;
@@ -721,7 +725,7 @@ index 00000000..007cf3eb
 +    /**
 +     * Spring does not map form parameters of multipart/form-data requests to JSON nor does it support to set
 +     * <code>@RequestParam</code> within a DTO. So we need to have all parameters in the endpoint spec rather than in a
-+     * custom DTO :/
++     * custom DTO.
 +     */
 +
 +    @Autowired
@@ -735,8 +739,7 @@ index 00000000..007cf3eb
 +    ,   @RequestPart ( value = "env"       , required = true  ) Map<String, String> env
 +    ,   @RequestPart ( value = "encoding"  , required = false ) String encoding
 +    ) {
-+        keycloakDeployer.deploy( toDeployment( name, data, mediaType, env, encoding ) );
-+        return ResponseEntity.accepted().body( keycloakDeployer.status( name ) );
++        return handleRequest( () -> keycloakDeployer.deploy( toDeployment( name, data, mediaType, env, encoding ) ) );
 +    }
 +
 +    @DeleteMapping( path = "/Deployer.undeploy/{name}", consumes = "multipart/form-data", produces = "application/json" )
@@ -747,20 +750,24 @@ index 00000000..007cf3eb
 +    ,   @RequestPart ( value = "env"       , required = true  ) Map<String, String> env
 +    ,   @RequestPart ( value = "encoding"  , required = false ) String encoding
 +    ) {
-+        keycloakDeployer.undeploy( toDeployment( name, data, mediaType, env, encoding ) );
-+        return ResponseEntity.accepted().body( keycloakDeployer.status( name ) );
++        return handleRequest( () -> keycloakDeployer.undeploy( toDeployment( name, data, mediaType, env, encoding ) ) );
 +    }
 +
-+    @GetMapping( path = "/Deployer.status/{name}", produces = "application/json" )
-+    public ResponseEntity<DeploymentResponse> status( @PathVariable String name ) {
-+        final DeploymentResponse status = keycloakDeployer.status( name );
-+        if ( status == null ) {
-+            final DeploymentResponse errorResponse = new DeploymentResponse();
-+            errorResponse.setStatus( DeploymentStatus.Failed );
-+            errorResponse.setMessage( String.format( "'%s' not in queue.", name ) );
-+            return ResponseEntity.badRequest().body( errorResponse );
++    private ResponseEntity<DeploymentResponse> handleRequest( Runnable runnable ) {
++        try {
++            runnable.run();
++            return ResponseEntity.ok().body( DeploymentResponse.builder().status( DeploymentStatus.Success ).build() );
 +        }
-+        return ResponseEntity.ok().body( status );
++        catch ( DeploymentException ex ) {
++            return ResponseEntity.badRequest().body(
++                DeploymentResponse.builder().status( DeploymentStatus.Failed ).message( ex.getMessage() ).build()
++            );
++        }
++        catch ( Throwable t ) {
++            return ResponseEntity.internalServerError().body(
++                DeploymentResponse.builder().status( DeploymentStatus.Failed ).message( t.getMessage() ).build()
++            );
++        }
 +    }
 +
 +    private Deployment toDeployment(
