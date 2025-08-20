@@ -1,7 +1,7 @@
 ##
 ## BUILD STAGE
 ##
-FROM maven:3.9.9-eclipse-temurin-21-alpine AS builder
+FROM maven:3.9.11-eclipse-temurin-21-alpine AS builder
 ARG KEYCLOAK_CONFIG_CLI_VERSION
 ARG KEYCLOAK_VERSION
 ARG KEYCLOAK_CLIENT_VERSION
@@ -14,9 +14,10 @@ RUN apk add patch
 WORKDIR /build
 
 ## download & unpack keycloak-config-cli
-RUN curl -fssLO \
-        https://github.com/adorsys/keycloak-config-cli/archive/refs/tags/v${KEYCLOAK_CONFIG_CLI_VERSION}.tar.gz
-RUN tar -xzf v${KEYCLOAK_CONFIG_CLI_VERSION}.tar.gz
+RUN set -e; \
+    curl -fssLO \
+        https://github.com/adorsys/keycloak-config-cli/archive/refs/tags/v${KEYCLOAK_CONFIG_CLI_VERSION}.tar.gz; \
+    tar -xzf v${KEYCLOAK_CONFIG_CLI_VERSION}.tar.gz
 
 COPY .m2 /root/.m2
 
@@ -27,7 +28,7 @@ RUN --mount=type=secret,id=GITHUB_ACTOR,env=GITHUB_ACTOR,required \
     set -e; \
     cd keycloak-config-cli-${KEYCLOAK_CONFIG_CLI_VERSION}; \
     patch -p1 < ../deployer.patch; \
-    mvn clean package \
+    mvn -V clean package \
         -DskipTests \
         -Dkeycloak.version=${KEYCLOAK_VERSION} \
         -Dkeycloak.client.version=${KEYCLOAK_CLIENT_VERSION} \

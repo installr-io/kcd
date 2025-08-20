@@ -22,6 +22,7 @@ if [[ $1 == "--no-cache" ]]; then
 fi
 
 docker build \
+    --progress plain \
     --build-arg KEYCLOAK_CONFIG_CLI_VERSION=${KEYCLOAK_CONFIG_CLI_VERSION} \
     --build-arg KEYCLOAK_CONFIG_CLI_BUILD_PROFILE=${KEYCLOAK_CONFIG_CLI_BUILD_PROFILE} \
     --build-arg KEYCLOAK_VERSION=${KEYCLOAK_VERSION} \
