@@ -1,5 +1,5 @@
 diff --git a/pom.xml b/pom.xml
-index e5e50f69..2c6c7cff 100644
+index e5e50f69..3f921e98 100644
 --- a/pom.xml
 +++ b/pom.xml
 @@ -90,6 +90,8 @@
@@ -7,7 +7,7 @@ index e5e50f69..2c6c7cff 100644
          <unboundid-ldapsdk.version>7.0.1</unboundid-ldapsdk.version>
          <wiremock-jre8.version>2.27.2</wiremock-jre8.version>
 +        <logback-access.version>1.4.14</logback-access.version>
-+        <installrd-deployer-api.version>0.1.0-SNAPSHOT</installrd-deployer-api.version>
++        <installr-lib-deployer.version>0.1.0</installr-lib-deployer.version>
  
          <sonar.projectKey>keycloak-config-cli</sonar.projectKey>
          <sonar.organization>adorsys</sonar.organization>
@@ -21,8 +21,8 @@ index e5e50f69..2c6c7cff 100644
 +        </dependency>
 +        <dependency>
 +            <groupId>io.installr</groupId>
-+            <artifactId>installrd-deployer-api</artifactId>
-+            <version>${installrd-deployer-api.version}</version>
++            <artifactId>installr-lib-deployer</artifactId>
++            <version>${installr-lib-deployer.version}</version>
 +        </dependency>
 +	<dependency>
 +            <groupId>ch.qos.logback</groupId>
@@ -334,7 +334,7 @@ index 00000000..dc05cd3a
 +}
 diff --git a/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java
 new file mode 100644
-index 00000000..de89aede
+index 00000000..07504da9
 --- /dev/null
 +++ b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployer.java
 @@ -0,0 +1,336 @@
@@ -390,9 +390,9 @@ index 00000000..de89aede
 +import de.adorsys.keycloak.config.provider.KeycloakProvider;
 +import de.adorsys.keycloak.config.service.ClientImportService;
 +import de.adorsys.keycloak.config.service.RealmImportService;
-+import io.installr.daemon.api.deployer.Deployer;
-+import io.installr.daemon.api.deployer.Deployment;
-+import io.installr.daemon.api.deployer.DeploymentException;
++import io.installr.lib.deployer.Deployer;
++import io.installr.lib.deployer.Deployment;
++import io.installr.lib.deployer.DeploymentException;
 +import jakarta.annotation.PostConstruct;
 +import jakarta.ws.rs.ClientErrorException;
 +import jakarta.ws.rs.core.Response;
@@ -676,10 +676,10 @@ index 00000000..de89aede
 +}
 diff --git a/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java
 new file mode 100644
-index 00000000..93f0e492
+index 00000000..fddaeba5
 --- /dev/null
 +++ b/src/main/java/io/installr/deployer/keycloak/KeycloakDeployerController.java
-@@ -0,0 +1,111 @@
+@@ -0,0 +1,112 @@
 +/*-
 + * ---license-start
 + * Installr Deployer Interface for keycloak-config-cli
@@ -714,10 +714,11 @@ index 00000000..93f0e492
 +import org.springframework.web.bind.annotation.RestController;
 +import org.springframework.web.multipart.MultipartFile;
 +
-+import io.installr.daemon.api.deployer.Deployment;
-+import io.installr.daemon.api.deployer.DeploymentException;
-+import io.installr.daemon.api.deployer.DeploymentResponse;
-+import io.installr.daemon.api.deployer.DeploymentStatus;
++import io.installr.lib.deployer.Deployment;
++import io.installr.lib.deployer.DeploymentException;
++import io.installr.lib.deployer.DeploymentResponse;
++import io.installr.lib.deployer.DeploymentStatus;
++
 +
 +@RestController
 +public class KeycloakDeployerController {
@@ -791,6 +792,40 @@ index 00000000..93f0e492
 +    }
 +
 +}
+diff --git a/src/main/java/io/installr/deployer/keycloak/test.md b/src/main/java/io/installr/deployer/keycloak/test.md
+new file mode 100644
+index 00000000..a7d63bb0
+--- /dev/null
++++ b/src/main/java/io/installr/deployer/keycloak/test.md
+@@ -0,0 +1,28 @@
++curl -isSLX PUT \
++    -H 'Content-Type: multipart/form-data' \
++    -F 'data=@test.realm.json' \
++    -F 'media-type=application/vnd.io.installr.kc-realm' \
++    -F 'env={"keycloak.url":"http://localhost:30006/public/sec/auth","keycloak.user":"coadmin","keycloak.password":"coadmin"};type=application/json' \
++    -F 'encoding=UTF-8' \
++    'http://localhost:8080/Deployer.deploy/test.realm.json'
++curl -ifsSLX PUT \
++    -H 'Content-Type: multipart/form-data' \
++    -F 'data=@test.client.json' \
++    -F 'media-type=application/vnd.io.installr.kc-client' \
++    -F 'env={"keycloak.url":"http://localhost:30006/public/sec/auth","keycloak.user":"coadmin","keycloak.password":"coadmin"};type=application/json' \
++    -F 'encoding=UTF-8' \
++    'http://localhost:8080/Deployer.deploy/test.client.json'
++curl -isSLX DELETE \
++    -H 'Content-Type: multipart/form-data' \
++    -F 'data=@test.realm.json' \
++    -F 'media-type=application/vnd.io.installr.kc-realm' \
++    -F 'env={"keycloak.url":"http://localhost:30006/public/sec/auth","keycloak.user":"coadmin","keycloak.password":"coadmin"};type=application/json' \
++    -F 'encoding=UTF-8' \
++    'http://localhost:8080/Deployer.undeploy/test.realm.json'
++curl -ifsSLX DELETE \
++    -H 'Content-Type: multipart/form-data' \
++    -F 'data=@test.client.json' \
++    -F 'media-type=application/vnd.io.installr.kc-client' \
++    -F 'env={"keycloak.url":"http://localhost:30006/public/sec/auth","keycloak.user":"coadmin","keycloak.password":"coadmin"};type=application/json' \
++    -F 'encoding=UTF-8' \
++    'http://localhost:8080/Deployer.undeploy/test.client.json'
 diff --git a/src/main/resources/logback-access.xml b/src/main/resources/logback-access.xml
 new file mode 100644
 index 00000000..72ce1a51
@@ -814,3 +849,41 @@ index 00000000..72ce1a51
 +
 +	<appender-ref ref="STDOUT" />
 +</configuration>
+diff --git a/src/test/java/de/adorsys/keycloak/config/service/ImportManagedNoDeleteIT.java b/src/test/java/de/adorsys/keycloak/config/service/ImportManagedNoDeleteIT.java
+index d05f5952..9987df55 100644
+--- a/src/test/java/de/adorsys/keycloak/config/service/ImportManagedNoDeleteIT.java
++++ b/src/test/java/de/adorsys/keycloak/config/service/ImportManagedNoDeleteIT.java
+@@ -23,7 +23,6 @@ package de.adorsys.keycloak.config.service;
+ import de.adorsys.keycloak.config.AbstractImportIT;
+ import de.adorsys.keycloak.config.repository.IdentityProviderMapperRepository;
+ import de.adorsys.keycloak.config.repository.IdentityProviderRepository;
+-import de.adorsys.keycloak.config.util.VersionUtil;
+ import org.junit.jupiter.api.Order;
+ import org.junit.jupiter.api.Test;
+ import org.keycloak.representations.idm.*;
+@@ -134,11 +133,7 @@ class ImportManagedNoDeleteIT extends AbstractImportIT {
+ 
+         List<ComponentExportRepresentation> createdSubComponents = createdComponents.get(0)
+                 .getSubComponents().getList("org.keycloak.storage.ldap.mappers.LDAPStorageMapper");
+-        if (VersionUtil.lt(KEYCLOAK_VERSION, "26")) {
+-            assertThat(createdSubComponents, hasSize(10));
+-        } else {
+-            assertThat(createdSubComponents, hasSize(11));
+-        }
++        assertThat(createdSubComponents, hasSize(10));
+ 
+         List<String> authenticationFlowsList = Arrays.asList("my auth flow", "my registration", "my registration form");
+         List<AuthenticationFlowRepresentation> createdAuthenticationFlows = createdRealm.getAuthenticationFlows()
+diff --git a/src/test/java/de/adorsys/keycloak/config/test/util/KeycloakMock.java b/src/test/java/de/adorsys/keycloak/config/test/util/KeycloakMock.java
+index 67999398..e6c6500c 100644
+--- a/src/test/java/de/adorsys/keycloak/config/test/util/KeycloakMock.java
++++ b/src/test/java/de/adorsys/keycloak/config/test/util/KeycloakMock.java
+@@ -61,7 +61,7 @@ public class KeycloakMock {
+ 
+     public static HttpResponse serverInfo(HttpRequest request) throws JsonProcessingException {
+         ServerInfoRepresentation serverInfo = new ServerInfoRepresentation();
+-        serverInfo.setSystemInfo(SystemInfoRepresentation.create(0, System.getProperty("keycloak.version")));
++        serverInfo.setSystemInfo(SystemInfoRepresentation.create(0));
+ 
+         String json = new ObjectMapper().writeValueAsString(serverInfo);
+         return response()
