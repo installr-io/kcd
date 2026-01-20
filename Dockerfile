@@ -37,7 +37,7 @@ RUN --mount=type=secret,id=GITHUB_ACTOR,env=GITHUB_ACTOR,required \
 ##
 ## PRODUCTION STAGE
 ##
-FROM ghcr.io/installr-io/uci:jre21
+FROM ghcr.io/installr-io/uci:jre21-1
 LABEL org.opencontainers.image.source=https://github.com/installr-io/installr-kcd
 ARG KEYCLOAK_CONFIG_CLI_VERSION
 
