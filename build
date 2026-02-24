@@ -4,6 +4,7 @@ BASEDIR=$(realpath $(dirname $0))
 
 NAME=ghcr.io/installr-io/installr-kcd
 VERSION=$(cat ${BASEDIR}/VERSION)
+HASH=$(git rev-parse --short HEAD)
 
 KEYCLOAK_CONFIG_CLI_VERSION=6.3.0
 KEYCLOAK_VERSION=24.0.5
@@ -29,9 +30,9 @@ docker build \
     --build-arg KEYCLOAK_CLIENT_VERSION=${KEYCLOAK_CLIENT_VERSION} \
     --secret id=GITHUB_ACTOR \
     --secret id=GITHUB_TOKEN \
-    --tag ${NAME}:${VERSION} \
+    --tag ${NAME}:${VERSION}-${HASH} \
     ${OPTS} ${BASEDIR}
 
 if [[ $1 == "--push" ]]; then
-    docker image push ${NAME}:${VERSION}
+    docker image push ${NAME}:${VERSION}-${HASH}
 fi
