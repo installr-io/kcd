@@ -2,7 +2,7 @@
 
 BASEDIR=$(realpath $(dirname $0))
 
-NAME=ghcr.io/installr-io/installr-kcd
+NAME=ghcr.io/installr-io/kcd
 VERSION=$(cat ${BASEDIR}/VERSION)
 HASH=$(git rev-parse --short HEAD)
 

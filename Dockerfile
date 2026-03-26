@@ -38,7 +38,7 @@ RUN --mount=type=secret,id=GITHUB_ACTOR,env=GITHUB_ACTOR,required \
 ## PRODUCTION STAGE
 ##
 FROM ghcr.io/installr-io/uci:jre21-1
-LABEL org.opencontainers.image.source=https://github.com/installr-io/installr-kcd
+LABEL org.opencontainers.image.source=https://github.com/installr-io/kcd
 ARG KEYCLOAK_CONFIG_CLI_VERSION
 
 COPY --from=builder /build/keycloak-config-cli-${KEYCLOAK_CONFIG_CLI_VERSION}/target/keycloak-config-cli.jar .
