@@ -1,5 +1,5 @@
 diff --git a/pom.xml b/pom.xml
-index e5e50f69..a687436a 100644
+index e5e50f69..3f921e98 100644
 --- a/pom.xml
 +++ b/pom.xml
 @@ -90,6 +90,8 @@
@@ -11,17 +11,13 @@ index e5e50f69..a687436a 100644
  
          <sonar.projectKey>keycloak-config-cli</sonar.projectKey>
          <sonar.organization>adorsys</sonar.organization>
-@@ -217,6 +219,25 @@
+@@ -217,6 +219,21 @@
              <scope>runtime</scope>
          </dependency>
  
 +        <dependency>
 +            <groupId>org.springframework.boot</groupId>
 +            <artifactId>spring-boot-starter-web</artifactId>
-+        </dependency>
-+        <dependency>
-+            <groupId>org.springframework.boot</groupId>
-+            <artifactId>spring-boot-starter-actuator</artifactId>
 +        </dependency>
 +        <dependency>
 +            <groupId>io.installr</groupId>
@@ -37,7 +33,7 @@ index e5e50f69..a687436a 100644
          <!-- TEST -->
          <dependency>
              <groupId>org.springframework.boot</groupId>
-@@ -277,6 +298,20 @@
+@@ -277,6 +294,20 @@
          </dependency>
      </dependencies>
  
@@ -58,7 +54,7 @@ index e5e50f69..a687436a 100644
      <build>
          <finalName>${project.artifactId}</finalName>
          <pluginManagement>
-@@ -567,6 +602,7 @@
+@@ -567,6 +598,7 @@
                      <failsOnError>true</failsOnError>
                      <linkXRef>false</linkXRef>
                      <violationSeverity>warning</violationSeverity>
