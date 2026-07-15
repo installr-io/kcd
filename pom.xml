@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Installr.io
+
+    Copyright (c) 2025-present Dorian Vallant
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, version 3.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.installr</groupId>
+        <artifactId>installr-project</artifactId>
+        <version>0.3.0</version>
+    </parent>
+
+    <groupId>io.installr.deployer</groupId>
+    <artifactId>kcd</artifactId>
+    <version>0.5.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <description>Deployer for Keycloak Resources (based on https://github.com/adorsys/keycloak-config-cli)</description>
+    <url>https://installr.io</url>
+
+    <scm>
+        <connection>scm:git:https://github.com/installr-io/kcd.git</connection>
+        <developerConnection>git@github.com:installr-io/kcd.git</developerConnection>
+        <url>https://github.com/installr-io/kcd</url>
+    </scm>
+
+    <properties>
+        <!-- plugin versions -->
+        <docker-maven-plugin.version>0.48.1</docker-maven-plugin.version>
+
+        <!-- keycloak -->
+        <keycloak.config-cli.version>6.3.0</keycloak.config-cli.version>
+        <keycloak.config-cli.build-profile>pre-keycloak26</keycloak.config-cli.build-profile>
+        <keycloak.version>24.0.5</keycloak.version>
+        <keycloak.client.version>24.0.5</keycloak.client.version>
+
+        <!-- container image -->
+        <container.registry>ghcr.io/installr-io</container.registry>
+        <!-- empty = autodetect -->
+        <container.platforms/>
+
+        <!-- disable install and deploy to maven repository (not needed)-->
+        <maven.install.skip>true</maven.install.skip>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>installr-io-maven-repo</id>
+            <name>Installr.io Maven Repository</name>
+            <url>https://maven.pkg.github.com/installr-io/installr</url>
+        </repository>
+    </repositories>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>buildnumber-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>create</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>io.fabric8</groupId>
+                <artifactId>docker-maven-plugin</artifactId>
+                <version>${docker-maven-plugin.version}</version>
+                <configuration>
+                    <outputDirectory>target/docker-build</outputDirectory>
+                    <useColor>false</useColor>
+                    <verbose>build</verbose>
+                    <images>
+                        <image>
+                            <external>
+                                <type>properties</type>
+                                <mode>override</mode>
+                            </external>
+                            <name>${container.registry}/${project.name}:${project.version}-${build.revision}</name>
+                            <build>
+                                <dockerFile>${project.basedir}/Dockerfile</dockerFile>
+                                <contextDir>${project.basedir}</contextDir>
+                                <buildx>
+                                    <platforms>
+                                        <platform>${container.platforms}</platform>
+                                    </platforms>
+                                    <secret>
+                                        <envs>
+                                            <GITHUB_ACTOR>GITHUB_ACTOR</GITHUB_ACTOR>
+                                            <GITHUB_TOKEN>GITHUB_TOKEN</GITHUB_TOKEN>
+                                        </envs>
+                                    </secret>
+                                </buildx>
+                                <args>
+                                    <KEYCLOAK_CONFIG_CLI_VERSION>${keycloak.config-cli.version}</KEYCLOAK_CONFIG_CLI_VERSION>
+                                    <KEYCLOAK_CONFIG_CLI_BUILD_PROFILE>${keycloak.config-cli.build-profile}</KEYCLOAK_CONFIG_CLI_BUILD_PROFILE>
+                                    <KEYCLOAK_VERSION>${keycloak.version}</KEYCLOAK_VERSION>
+                                    <KEYCLOAK_CLIENT_VERSION>${keycloak.client.version}</KEYCLOAK_CLIENT_VERSION>
+                                </args>
+                            </build>
+                        </image>
+                    </images>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>build-container-image</id>
+                        <goals>
+                            <goal>build</goal>
+                        </goals>
+                        <phase>package</phase>
+                    </execution>
+                    <execution>
+                        <id>push-container-image</id>
+                        <goals>
+                            <goal>push</goal>
+                        </goals>
+                        <phase>deploy</phase>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
