@@ -1,7 +1,7 @@
 ##
 ## BUILD STAGE
 ##
-FROM maven:3.9.11-eclipse-temurin-21-alpine AS builder
+FROM maven:3.9.16-eclipse-temurin-21-alpine AS builder
 ARG KEYCLOAK_CONFIG_CLI_VERSION
 ARG KEYCLOAK_VERSION
 ARG KEYCLOAK_CLIENT_VERSION

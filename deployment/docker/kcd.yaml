@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+    app:
+        hostname: kcd
+        image: ${container.registry}/kcd:${project.version}-${build.revision}
+        deploy:
+            replicas: ${replicas}
+            max_replicas_per_node: ${max_replicas_per_node}
+            placement:
+                preferences: [spread: node.labels.co-node-type]
+            resources:
+                limits:
+                    memory: ${memory}
+            restart_policy:
+                condition: any
+                delay: 2s
+                max_attempts: ${max_restart_attempts}
+            labels:
+                - "co.globalUniqueId=${globalUniqueId}"
+                - "traefik.enable=true"
+                - "traefik.http.routers.kcd.rule=PathPrefix(`/kcd`)"
+                - "traefik.http.routers.kcd.entrypoints=internal"
+                - "traefik.http.routers.kcd.middlewares=kcd-stripprefix"
+                - "traefik.http.middlewares.kcd-stripprefix.stripprefix.prefixes=/kcd"
+                - "traefik.http.services.kcd.loadbalancer.server.port=8080"
+        ports:
+            - ${port}:8080
+        environment:
+            - JVM_OPTIONS=${jvm_options}
+            - LOG_LEVEL=${log_level}

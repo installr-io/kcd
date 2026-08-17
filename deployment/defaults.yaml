@@ -1,0 +1,28 @@
+##
+## common properties
+##
+
+## how often should the service be replicated
+replicas: 1
+
+## maximum number of replicas to run on a single node
+## 0 (zero) indicates no restriction
+max-replicas-per-node: 0
+
+## maximum memory this service can acquire
+memory: 1G
+
+## the maximum attempts of restart in case of failure
+## 0 (zero) indicates infinite restarts
+max-restart-attempts: 50
+
+## additional options for the JVM
+jvm-options: ''
+
+##
+## service specific properties
+##
+log-level: warn
+
+## port this service is listing for incoming requests
+port: 30001

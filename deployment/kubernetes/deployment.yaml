@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    namespace: \${namespace}
+    name: ${project.name}
+    labels:
+        app.kubernetes.io/name: ${project.name}
+        app.kubernetes.io/instance: ${project.name}
+        app.kubernetes.io/version: ${project.version}
+        app.kubernetes.io/managed-by: Installr
+spec:
+    replicas: \${replicas}
+    revisionHistoryLimit: 5
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: ${project.name}
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/name: ${project.name}
+                app.kubernetes.io/instance: ${project.name}
+                app.kubernetes.io/version: ${project.version}
+                app.kubernetes.io/managed-by: Installr
+        spec:
+            containers:
+                - envFrom:
+                      - configMapRef:
+                            name: ${project.name}
+                  image: ${container.registry}/kcd:${project.version}-${build.revision}
+                  imagePullPolicy: Always
+                  name: ${project.name}
+                  ports:
+                      - containerPort: 8080
+                        name: http
+                        protocol: TCP
+                  resources:
+                      limits:
+                          memory: \${memory}
+            imagePullSecrets:
+                - name: \${global_image_pull_secret}
