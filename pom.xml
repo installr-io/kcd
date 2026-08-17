@@ -45,6 +45,7 @@
     <properties>
         <!-- plugin versions -->
         <docker-maven-plugin.version>0.48.1</docker-maven-plugin.version>
+        <ipf-maven-plugin.version>0.3.0</ipf-maven-plugin.version>
 
         <!-- keycloak -->
         <keycloak.config-cli.version>6.3.0</keycloak.config-cli.version>
@@ -56,6 +57,10 @@
         <container.registry>ghcr.io/installr-io</container.registry>
         <!-- empty = autodetect -->
         <container.platforms/>
+
+        <!-- ipf registry -->
+        <ipf.repository.url/>
+        <ipf.snapshot-repository.url/>
 
         <!-- disable install and deploy to maven repository (not needed)-->
         <maven.install.skip>true</maven.install.skip>
@@ -69,6 +74,14 @@
             <url>https://maven.pkg.github.com/installr-io/installr</url>
         </repository>
     </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>installr-io-maven-repo</id>
+            <name>Installr.io Maven Repository</name>
+            <url>https://maven.pkg.github.com/installr-io/installr</url>
+        </pluginRepository>
+    </pluginRepositories>
 
     <build>
         <plugins>
@@ -137,6 +150,66 @@
                         </goals>
                         <phase>deploy</phase>
                     </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>process-deployment-resources</id>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <phase>package</phase>
+                        <configuration>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/deployment</directory>
+                                    <filtering>true</filtering>
+                                    <includes>
+                                        <include>docker/**</include>
+                                        <include>kubernetes/**</include>
+                                    </includes>
+                                </resource>
+                                <resource>
+                                    <directory>${project.basedir}/deployment</directory>
+                                    <filtering>false</filtering>
+                                    <excludes>
+                                        <exclude>docker/**</exclude>
+                                        <include>kubernetes/**</include>
+                                    </excludes>
+                                </resource>
+                            </resources>
+                            <outputDirectory>${project.build.directory}/ipf-sources</outputDirectory>
+                            <escapeString>\</escapeString>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>io.installr</groupId>
+                <artifactId>ipf-maven-plugin</artifactId>
+                <version>${ipf-maven-plugin.version}</version>
+                <configuration>
+                    <repositoryUrl>${ipf.repository.url}</repositoryUrl>
+                    <snapshotRepositoryUrl>${ipf.snapshot-repository.url}</snapshotRepositoryUrl>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>build-ipf-package</id>
+                        <goals>
+                            <goal>package</goal>
+                        </goals>
+                        <phase>package</phase>
+                    </execution>
+                    <!-- <execution>
+                        <id>push-ipf-package</id>
+                        <goals>
+                            <goal>push</goal>
+                        </goals>
+                        <phase>deploy</phase>
+                    </execution> -->
                 </executions>
             </plugin>
         </plugins>
