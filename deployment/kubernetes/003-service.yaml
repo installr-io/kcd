@@ -1,6 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
+    namespace: \${namespace}
     name: ${project.name}
     labels:
         app.kubernetes.io/name: ${project.name}
@@ -12,7 +13,7 @@ spec:
         - name: http
           port: 80
           targetPort: 8080
-          nodePort: ${port}
+          nodePort: \${port}
     selector:
         app.kubernetes.io/instance: ${project.name}
     type: NodePort

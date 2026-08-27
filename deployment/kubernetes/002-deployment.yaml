@@ -1,14 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+    namespace: \${namespace}
+    name: ${project.name}
     labels:
         app.kubernetes.io/name: ${project.name}
         app.kubernetes.io/instance: ${project.name}
         app.kubernetes.io/version: ${project.version}
         app.kubernetes.io/managed-by: Installr
-    name: ${project.name}
 spec:
-    replicas: ${replicas}
+    replicas: \${replicas}
     revisionHistoryLimit: 5
     selector:
         matchLabels:
@@ -34,6 +35,6 @@ spec:
                         protocol: TCP
                   resources:
                       limits:
-                          memory: ${memory}
+                          memory: \${memory}
             imagePullSecrets:
                 - name: \${global_image_pull_secret}

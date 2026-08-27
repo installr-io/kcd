@@ -1,6 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+    namespace: \${namespace}
     name: ${project.name}
     labels:
         app.kubernetes.io/name: ${project.name}
@@ -8,5 +9,5 @@ metadata:
         app.kubernetes.io/version: ${project.version}
         app.kubernetes.io/managed-by: Installr
 data:
-    JAVA_OPTIONS: ${java_options}
-    LOG_LEVEL: ${log_level}
+    JAVA_OPTIONS: \${java_options}
+    LOG_LEVEL: \${log_level}
